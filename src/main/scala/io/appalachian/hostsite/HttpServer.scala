@@ -1,30 +1,37 @@
 package io.appalachian.hostsite
 
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.server._
+import java.nio.file.{Files, Path}
 
 object HttpServer {
   object Route extends Directives {
 
-    val route: Route =
+    def route(cwd: Path): Route =
       extractHost { host =>
-        // @TODO use Path to build paths instead of string concat
-        val dir = s"./${filterHost(host)}"
+        val path = cwd.resolve(filterHost(host)).toAbsolutePath
 
-        concat(
-          pathEndOrSingleSlash {
-            getFromFile(s"$dir/index.html")
-          },
-          getFromBrowseableDirectory(dir)
-        )
+        if (!Files.isSameFile(path.getParent, cwd))
+          complete(StatusCodes.NotFound)
+        else
+          concat(
+            pathEndOrSingleSlash {
+              getFromFile(path.resolve("index.html").toString)
+            },
+            getFromBrowseableDirectory(path.toString)
+          )
       }
   }
 
   private def filterHost(host: String): String =
-    host.filter(
-      c =>
-        (c >= 'A' && c <= 'Z') ||
-          (c >= 'a' && c <= 'z') ||
-          (c >= '0' && c <= '9') ||
-          c == '.' ||
-          c == '-')
+    host
+      .dropWhile(_ == '.')
+      .filter(
+        c =>
+          (c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') ||
+            (c >= '0' && c <= '9') ||
+            c == '.' ||
+            c == '-')
+      .trim
 }
